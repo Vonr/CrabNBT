@@ -1,4 +1,7 @@
-use bytes::{BufMut, Bytes, BytesMut};
+use std::ops::{Index, IndexMut};
+
+use bytes::{BufMut, BytesMut};
+use thiserror::Error;
 
 use crate::{NbtCompound, NbtTag};
 
@@ -14,6 +17,14 @@ impl Default for NbtList {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum MakeHomogeneousError {
+    #[error("Not homogeneous")]
+    NotHomogeneous,
+    #[error("Non-Compound element in heterogeneous List")]
+    NonCompoundElement,
+}
+
 impl NbtList {
     pub fn new() -> NbtList {
         Self {
@@ -27,6 +38,14 @@ impl NbtList {
             inner: Vec::with_capacity(initial_capacity),
             homogeneous: true,
         }
+    }
+
+    pub fn reserve(&mut self, additional_capacity: usize) {
+        self.inner.reserve(additional_capacity)
+    }
+
+    pub fn reserve_exact(&mut self, additional_capacity: usize) {
+        self.inner.reserve_exact(additional_capacity)
     }
 
     pub fn is_homogeneous(&self) -> bool {
@@ -99,6 +118,29 @@ impl NbtList {
         }
     }
 
+    pub fn insert(&mut self, index: usize, element: impl Into<NbtTag>) {
+        let element: NbtTag = element.into();
+        let current_type_id = self.element_type_id();
+
+        if self.homogeneous {
+            let new_type_id = element.get_type_id();
+            self.inner.insert(index, element);
+            if current_type_id != new_type_id && current_type_id != NbtTag::End.get_type_id() {
+                self.make_heterogeneous();
+            }
+            return;
+        }
+
+        match element {
+            NbtTag::Compound(_) => self.inner.insert(index, element),
+            _ => self.inner.insert(index, NbtCompound::wrap(element).into()),
+        }
+    }
+
+    pub fn remove(&mut self, index: usize) -> NbtTag {
+        self.inner.remove(index)
+    }
+
     pub fn make_heterogeneous(&mut self) {
         if self.is_heterogeneous() {
             return;
@@ -110,6 +152,40 @@ impl NbtList {
                 *e = NbtCompound::wrap(std::mem::replace(e, NbtTag::End)).into();
             }
         }
+    }
+
+    pub fn make_homogeneous(&mut self) -> Result<(), MakeHomogeneousError> {
+        if self.homogeneous {
+            return Ok(());
+        }
+
+        if self.is_empty() {
+            self.homogeneous = true;
+            return Ok(());
+        }
+
+        let first_element_id = self.get(0).unwrap().get_type_id();
+        let mut new = Vec::with_capacity(self.len());
+        for e in self.into_iter() {
+            if e.get_type_id() != first_element_id {
+                return Err(MakeHomogeneousError::NotHomogeneous);
+            }
+
+            let NbtTag::Compound(ref mut compound) = e else {
+                return Err(MakeHomogeneousError::NonCompoundElement);
+            };
+
+            if compound.child_tags.len() == 1 && compound.child_tags[0].0.is_empty() {
+                new.push(compound.child_tags.remove(0).1);
+            } else {
+                new.push(NbtTag::Compound(std::mem::replace(
+                    compound,
+                    NbtCompound::new(),
+                )));
+            }
+        }
+
+        Ok(())
     }
 
     pub fn into_native(self) -> Result<NbtTag, NbtList> {
@@ -184,6 +260,12 @@ impl NbtList {
 
     pub fn iter_mut<'a>(&'a mut self) -> IterMut<'a> {
         self.into_iter()
+    }
+
+    pub fn extend(&mut self, iter: impl IntoIterator<Item = NbtList>) {
+        let iter = iter.into_iter();
+        self.reserve(iter.size_hint().0);
+        iter.into_iter().for_each(|e| self.push(e));
     }
 }
 
@@ -299,5 +381,19 @@ impl<'a> IntoIterator for &'a mut NbtList {
 impl AsRef<[NbtTag]> for NbtList {
     fn as_ref(&self) -> &[NbtTag] {
         &self.inner
+    }
+}
+
+impl Index<usize> for NbtList {
+    type Output = NbtTag;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        self.get(index).unwrap()
+    }
+}
+
+impl IndexMut<usize> for NbtList {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        self.get_mut(index).unwrap()
     }
 }
