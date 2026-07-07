@@ -90,6 +90,7 @@ fn nbt_compound() {
 fn nbt_numbers() {
     assert_parse!("1e7f", NbtTag::Float(1e7));
     assert_parse!("1e7", NbtTag::Double(1e7));
+    // assert_parse!("0.0_4E10f", NbtTag::Float(0.0_4E10));
     assert_parse!("10", NbtTag::Int(10));
     assert_parse!("-25", NbtTag::Int(-25));
     assert_parse!("5b", NbtTag::Byte(5));
@@ -100,8 +101,9 @@ fn nbt_numbers() {
 
     assert_parse!("255UB", NbtTag::Byte(-1));
     assert_parse!("10SB", NbtTag::Byte(10));
+    assert_parse!("0b0b", NbtTag::Byte(0));
 
-    // assert_parse!("0x1f", NbtTag::Int(0x1f));
+    assert_parse!("0x1f", NbtTag::Int(0x1f));
 
     const TRUE: NbtTag = NbtTag::Byte(1);
     const FALSE: NbtTag = NbtTag::Byte(0);
@@ -118,13 +120,13 @@ fn nbt_fails() {
     assert_matches!(r#"{"": {}}"#.parse::<NbtTag>(), Err(_));
 
     assert_matches!("1a".parse::<NbtTag>(), Err(_));
-    // assert_matches!("0x".parse::<NbtTag>(), Err(_));
+    assert_matches!("0x".parse::<NbtTag>(), Err(_));
     assert_matches!("_1E1".parse::<NbtTag>(), Err(_));
     assert_matches!("1_E1".parse::<NbtTag>(), Err(_));
     assert_matches!("1E_1".parse::<NbtTag>(), Err(_));
     assert_matches!("1E1_".parse::<NbtTag>(), Err(_));
-    // assert_matches!("1E.1".parse::<NbtTag>(), Err(_));
-    // assert_matches!("1E1.".parse::<NbtTag>(), Err(_));
+    assert_matches!("1E.1".parse::<NbtTag>(), Err(_));
+    assert_matches!("1E1.".parse::<NbtTag>(), Err(_));
 }
 
 #[test]

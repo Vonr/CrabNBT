@@ -1,13 +1,27 @@
-use std::{error::Error, fmt::Display};
+use std::num::{ParseFloatError, ParseIntError};
 
-use crate::nbt::snbt::de::utils::StrVisitor;
+use crate::nbt::snbt::de::{
+    numbers::{NumberType, Radix, Signedness},
+    utils::StrVisitor,
+};
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct SnbtDeserialisationError {
-    pub index: usize,
-    pub offending_area: String,
-    pub expected: &'static str
+#[derive(thiserror::Error, Debug, PartialEq)]
+pub enum SnbtDeserialisationError {
+    #[error("Illegal combination of {0:?}, {1:?}, and {2:?}")]
+    IllegalCombination(Radix, Signedness, NumberType),
+    #[error(transparent)]
+    ParseFloatError(ParseFloatError),
+    #[error(transparent)]
+    ParseIntError(ParseIntError),
+
+    #[error("Expected {expected} at position {index}: {offending_area} <--[HERE]")]
+    Unexpected {
+        index: usize,
+        offending_area: String,
+        expected: &'static str,
+    },
 }
+
 const MAX_OFFENSE_INFO_LENGTH: usize = 12;
 impl SnbtDeserialisationError {
     pub fn from_visitor(visitor: &StrVisitor, expected: &'static str) -> Self {
@@ -20,24 +34,11 @@ impl SnbtDeserialisationError {
             .collect::<Vec<char>>()
             .iter()
             .rev()
-            .collect()
-            ;
-        SnbtDeserialisationError {
+            .collect();
+        SnbtDeserialisationError::Unexpected {
             index: visitor.get_position(),
             offending_area,
-            expected
+            expected,
         }
     }
 }
-impl Display for SnbtDeserialisationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Expected {} at position {}: {} <--[HERE]",
-            self.expected,
-            self.index,
-            self.offending_area
-        )
-    }
-}
-impl Error for SnbtDeserialisationError { }

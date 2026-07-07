@@ -1,23 +1,26 @@
-//! 
-//! 
+//!
+//!
 //! -?((0b(0|1)+|0x[0-9a-fA-F]+)|0(b|s|i|l|f|d|B|S|I|L|F|D)?|[1-9][0-9]*(b|s|i|l|f|d|B|S|I|L|F|D)?|[1-9][0-9]*.[0-9]*(f|d|F|D)?)
-
 
 use std::{fmt::Debug, str::FromStr};
 
-use crate::nbt::{NbtTag, error::SnbtDeserialisationError, snbt::de::utils::{ReaderAction, StrVisitor, expect_str, read_slice_while_skipping}};
+use crate::nbt::{
+    error::SnbtDeserialisationError,
+    snbt::de::utils::{expect_str, read_slice_while_skipping, ReaderAction, StrVisitor},
+    NbtTag,
+};
 
-#[derive(Clone, Copy, Debug)]
-enum NumberType {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NumberType {
     Byte,
     Short,
     Integer,
     Long,
     Float,
-    Double
+    Double,
 }
-#[derive(Clone, Copy, Debug)]
-enum Signedness {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Signedness {
     Signed,
     Unsigned,
     /// No explicit signedness was specified.
@@ -27,20 +30,20 @@ enum Signedness {
     // We could use Signed as a default, but this would be less readable than Unspecified lit.
     // One additional variant costs no performance (assuming jump tables)
     // and is unlikely to cause any spacial costs (e.g. Option still has 253 different values)
-    Unspecified
+    Unspecified,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Radix {
+pub enum Radix {
     Binary,
     Decimal,
-    Hexadecimal
+    Hexadecimal,
 }
 impl Radix {
     pub const fn check_character(self, c: char) -> bool {
         match self {
             Self::Binary => c == '0' || c == '1',
             Self::Decimal => c.is_ascii_digit() || c == '.' || c == '-' || c == 'e' || c == 'E',
-            Self::Hexadecimal => c.is_ascii_hexdigit()
+            Self::Hexadecimal => c.is_ascii_hexdigit(),
         }
     }
 
@@ -48,17 +51,17 @@ impl Radix {
         match self {
             Self::Binary => 2,
             Self::Decimal => 10,
-            Self::Hexadecimal => 16
+            Self::Hexadecimal => 16,
         }
     }
 }
 
 /// Generates code to decode the signedness and number type using multi-layered match-statements.
-/// 
+///
 /// Number suffixes are deeply layered, but often vary in minutiae depending on previous branches.
 /// Creating a runtime-state for this turned out to require function pointer for basically every
 /// action.
-/// 
+///
 /// - `match_target` may run multiple times so be sure that is is sound to do so.
 /// - `error_unsignable` will run at most once and do so whenever a character would have been valid
 ///   before a signedness suffix, but a signedness suffix was already processed, so it isn't.
@@ -160,7 +163,9 @@ macro_rules! parse_number_suffix {
     };
 }
 
-pub fn read_number_or_numboid_const(visitor: &mut StrVisitor) -> Result<NbtTag, SnbtDeserialisationError> {
+pub fn read_number_or_numboid_const(
+    visitor: &mut StrVisitor,
+) -> Result<NbtTag, SnbtDeserialisationError> {
     if expect_str(visitor, "true").is_ok() {
         Ok(NbtTag::Byte(1))
     } else if expect_str(visitor, "false").is_ok() {
@@ -214,9 +219,9 @@ fn read_number(visitor: &mut StrVisitor) -> Result<NbtTag, SnbtDeserialisationEr
                 continue;
             }
             '_' => {
-                if visitor.peek().is_none_or(|c| matches!(c, '0'..='9')) {
+                visitor.next().unwrap();
+                if visitor.peek().is_some_and(|c| c.is_ascii_digit()) {
                     num_end += 1;
-                    visitor.next().unwrap();
                     continue;
                 } else {
                     return Err(SnbtDeserialisationError::from_visitor(
@@ -238,7 +243,7 @@ fn read_number(visitor: &mut StrVisitor) -> Result<NbtTag, SnbtDeserialisationEr
     //     Cow::Borrowed(b) => println!("Borrowed({b})"),
     //     Cow::Owned(o) => println!("Owned({o})")
     // }
-    
+
     let (mut signedness, mut number_type) = parse_number_suffix! {
         match visitor.next();
         all,
@@ -249,7 +254,7 @@ fn read_number(visitor: &mut StrVisitor) -> Result<NbtTag, SnbtDeserialisationEr
         on_false_signedness = |c: Option<char>| if c.is_some() { visitor.previous(); },
         else read_c => {
             // when visitor.next() returns None, it does not advance further, therefore previous()
-            // would move 
+            // would move
             if read_c.is_some() {
                 // The character might be a "," or similar.
                 // Higher parsers can worry about that character, I'm just creating numbers.
@@ -263,48 +268,51 @@ fn read_number(visitor: &mut StrVisitor) -> Result<NbtTag, SnbtDeserialisationEr
             }
         }
     };
-    
+
     // from_str_radix does not expect prefixes (that is "0x" and "0b")
     let without_radix_prefix = match radix {
-        Radix::Binary => if num_str.len() == 2 {
-            // "0b" looks like the start of a binary number to the reader,
-            // so we must check and perform this correction.
-            (radix, signedness, number_type) = (Radix::Decimal, Signedness::Unspecified, NumberType::Byte);
-            "0"
-        } else {
-            &num_str[2..]
-        },
+        Radix::Binary => {
+            if num_str.len() == 2 {
+                // "0b" looks like the start of a binary number to the reader,
+                // so we must check and perform this correction.
+                (radix, signedness, number_type) =
+                    (Radix::Decimal, Signedness::Unspecified, NumberType::Byte);
+                "0"
+            } else {
+                &num_str[2..]
+            }
+        }
         Radix::Hexadecimal => &num_str[2..],
-        Radix::Decimal => &num_str
+        Radix::Decimal => &num_str,
     };
     match get_number_parser(radix, signedness, number_type) {
-        Some(parser) => {
-            parser(without_radix_prefix)
-        },
-        None => todo!("better error structures. Illegal combination of ({radix:?}, {signedness:?}, {number_type:?})")
+        Some(parser) => parser(without_radix_prefix),
+        None => Err(SnbtDeserialisationError::IllegalCombination(
+            radix,
+            signedness,
+            number_type,
+        )),
     }
 }
 
 macro_rules! wrap_float {
     ($mapper:expr) => {
-        (
-            |s| FromStr::from_str(s)
+        (|s| {
+            FromStr::from_str(s)
                 .map($mapper)
-                .map_err(|e| todo!("better error structures {e}"))
-        ) as for<'a> fn(&'a _) -> _
+                .map_err(SnbtDeserialisationError::ParseFloatError)
+        }) as for<'a> fn(&'a _) -> _
     };
 }
 
 macro_rules! wrap_int {
     ($radix:ident, $source_type:ty, $dest_type:ty) => {
-        (
-            |s| <$source_type>::from_str_radix(
-                    s,
-                    Radix::$radix.get_radix_number()
-                ).map(|source| source as $dest_type)
+        (|s| {
+            <$source_type>::from_str_radix(s, Radix::$radix.get_radix_number())
+                .map(|source| source as $dest_type)
                 .map(NbtTag::from)
-                .map_err(|e| todo!("better error structures {e}"))
-        ) as for<'a> fn(&'a _) -> _
+                .map_err(SnbtDeserialisationError::ParseIntError)
+        }) as for<'a> fn(&'a _) -> _
     };
     ($radix:ident, $source_type:ty) => {
         wrap_int!($radix, $source_type, $source_type)
@@ -350,7 +358,7 @@ macro_rules! find_parser_matching {
                 )
             }
         }
-        
+
         match $target {
             $((Radix::$radix, sign, NumberType::Byte) => foo!($radix, sign, u8, i8),)+
             $((Radix::$radix, sign, NumberType::Short) => foo!($radix, sign, u16, i16),)+
@@ -368,7 +376,7 @@ macro_rules! find_parser_matching {
 const fn get_number_parser(
     radix: Radix,
     signedness: Signedness,
-    number_type: NumberType
+    number_type: NumberType,
 ) -> Option<fn(&str) -> Result<NbtTag, SnbtDeserialisationError>> {
     find_parser_matching!((radix, signedness, number_type))
 }
@@ -380,7 +388,7 @@ fn is_number_character(c: char) -> bool {
     // important! Keep consistent with [`may_start_number`]
     // see https://minecraft.wiki/w/NBT_format#Number_format
     // exponential included, because E and e are both hexdigits.
-    c.is_ascii_hexdigit() || c == '.'|| c == '-' || c == '_' || c == 'x'
+    c.is_ascii_hexdigit() || c == '.' || c == '-' || c == '_' || c == 'x'
 }
 
 pub fn may_start_number(c: char) -> bool {
