@@ -364,7 +364,7 @@ impl FromVisitor for NbtTag {
                     }
                 } else {
                     // NOTE: This branch also triggers if visitor is fully consumed
-                    read_list(visitor).map(|v| NbtTag::List(NbtList::from_iter(v)))
+                    read_list(visitor).map(|v| NbtTag::List(v))
                 }
             }
             c if may_start_number(c) => read_number_or_numboid_const(visitor),
@@ -458,16 +458,11 @@ fn uuid_from_str(s: &str) -> Result<Vec<i32>, SnbtDeserialisationError> {
 const LIST_SEPARATOR_MSG: &'static str = ", or ]";
 /// Reads an SNBT List with correction for heterogeneous lists.
 /// Assumes the opening `[` character has already been consumed.
-fn read_list(visitor: &mut StrVisitor) -> Result<Vec<NbtTag>, SnbtDeserialisationError> {
-    let mut content = vec![];
-    let mut homogeneous_content_type: Option<Option<Discriminant<NbtTag>>> = None;
+fn read_list(visitor: &mut StrVisitor) -> Result<NbtList, SnbtDeserialisationError> {
+    let mut content: Vec<NbtTag> = Vec::new();
     loop {
         consume_whitespace(visitor);
         let tag = NbtTag::from_visitor(visitor)?;
-        homogeneous_content_type = homogeneous_content_type
-            .map_or(Some(Some(discriminant(&tag))), |list_content| {
-                Some(list_content.filter(|d| *d == discriminant(&tag)))
-            });
         content.push(tag);
 
         consume_whitespace(visitor);
@@ -480,29 +475,9 @@ fn read_list(visitor: &mut StrVisitor) -> Result<Vec<NbtTag>, SnbtDeserialisatio
             break;
         }
     }
-    if homogeneous_content_type
-        .unwrap_or(Some(discriminant(&NbtTag::End)))
-        .is_none()
-    {
-        // Heterogeneous List correction
-        // Nbt does not allow hetereogeneous lists
-        // (lists where each element may have a different type),
-        // but SNBT does (since https://www.minecraft.net/en-us/article/minecraft-snapshot-25w09a).
-        //
-        // Heterogenous lists must be deserialised into lists of type NbtCompound,
-        // with each element contained in a compound like so {"": element}
-        content = content
-            .into_iter()
-            .map(|elem| {
-                [(String::new(), elem)]
-                    .into_iter()
-                    .collect::<NbtCompound>()
-                    .into()
-            })
-            .collect();
-    } else {
-        content.shrink_to_fit();
-    }
+
+    let content = content.into();
+    eprintln!("{content:#?}");
     Ok(content)
 }
 

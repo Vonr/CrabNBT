@@ -14,13 +14,6 @@ fn tag_helper(s: &str) -> NbtTag {
     NbtTag::from_str(s).unwrap()
 }
 
-fn wrap(tag: NbtTag) -> NbtTag {
-    NbtCompound {
-        child_tags: vec![(String::new(), tag)],
-    }
-    .into()
-}
-
 #[test]
 fn nbt_tag() {
     assert_eq!(tag_helper("Hello"), NbtTag::String("Hello".to_owned()));
@@ -43,10 +36,10 @@ fn nbt_list() {
     assert_eq!(
         tag_helper("[A,[],B,{}]"),
         NbtTag::List(NbtList::from_iter(vec![
-            wrap(NbtTag::String("A".to_string())),
-            wrap(NbtTag::List(NbtList::new())),
-            wrap(NbtTag::String("B".to_string())),
-            wrap(NbtTag::Compound(NbtCompound::new()))
+            NbtTag::String("A".to_string()),
+            NbtTag::List(NbtList::new()),
+            NbtTag::String("B".to_string()),
+            NbtTag::Compound(NbtCompound::new()),
         ]))
     );
     assert_eq!(
