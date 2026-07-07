@@ -12,6 +12,8 @@ use crate::nbt::snbt::de::numbers::{may_start_number, read_number_or_numboid_con
 use crate::nbt::snbt::de::utils::{FromVisitor, StrVisitor, consume_whitespace, expect_char, expect_str, impl_FromStr_through_FromVisitor, read_slice_while, read_string};
 use crate::nbt::error::SnbtDeserialisationError;
 
+use crate::nbt::list::NbtList;
+
 /// Enum representing the different types of NBT tags.
 /// Each variant corresponds to a different type of data that can be stored in an NBT tag.
 #[repr(u8)]
@@ -26,7 +28,7 @@ pub enum NbtTag {
     Double(f64) = DOUBLE_ID,
     ByteArray(Bytes) = BYTE_ARRAY_ID,
     String(String) = STRING_ID,
-    List(Vec<NbtTag>) = LIST_ID,
+    List(NbtList) = LIST_ID,
     Compound(NbtCompound) = COMPOUND_ID,
     IntArray(Vec<i32>) = INT_ARRAY_ID,
     LongArray(Vec<i64>) = LONG_ARRAY_ID,
@@ -66,10 +68,10 @@ impl NbtTag {
                 bytes.put_slice(&java_string);
             }
             NbtTag::List(list) => {
-                bytes.put_u8(list.first().unwrap_or(&NbtTag::End).get_type_id());
+                bytes.put_u8(list.element_type_id());
                 bytes.put_i32(list.len() as i32);
-                for nbt_tag in list {
-                    bytes.put(nbt_tag.serialize_data())
+                for tag in list {
+                    bytes.put(tag.serialize_data())
                 }
             }
             NbtTag::Compound(compound) => {
@@ -136,10 +138,9 @@ impl NbtTag {
             LIST_ID => {
                 let tag_type_id = bytes.get_u8();
                 let len = bytes.get_i32();
-                let mut list = Vec::with_capacity(len as usize);
+                let mut list = NbtList::with_capacity(len as usize);
                 for _ in 0..len {
                     let tag = NbtTag::deserialize_data(bytes, tag_type_id)?;
-                    assert_eq!(tag.get_type_id(), tag_type_id);
                     list.push(tag);
                 }
                 Ok(NbtTag::List(list))
@@ -234,7 +235,7 @@ impl NbtTag {
         }
     }
 
-    pub fn extract_list(&self) -> Option<&Vec<NbtTag>> {
+    pub fn extract_list(&self) -> Option<&NbtList> {
         match self {
             NbtTag::List(list) => Some(list),
             _ => None,
