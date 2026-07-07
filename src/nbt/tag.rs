@@ -524,11 +524,10 @@ where
     let mut content = vec![];
     loop {
         consume_whitespace(visitor);
-        content.push(
-            read_slice_while(visitor, |c| c.is_ascii_digit() || c == '-')
-                .parse()
-                .expect("todo: better error structures"),
-        );
+        let slice = read_slice_while(visitor, |c| c.is_ascii_digit() || c == '-');
+        if !slice.is_empty() {
+            content.push(slice.parse().expect("todo: better error structures"));
+        }
 
         consume_whitespace(visitor);
         if visitor

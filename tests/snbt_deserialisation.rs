@@ -1,6 +1,7 @@
 use std::assert_matches;
 use std::str::FromStr as _;
 
+use bytes::Bytes;
 use crab_nbt::{nbt, NbtCompound, NbtList, NbtTag};
 
 macro_rules! assert_parse {
@@ -73,6 +74,15 @@ fn nbt_uuids() {
         "uuid(\"7c3be0c5-6abd-4fa5-b3f1-0634daa981df\")",
         NbtTag::IntArray(vec![2084298949, 1790791589, -1276049868, -626425377])
     )
+}
+
+#[test]
+fn nbt_arrays() {
+    assert_parse!(
+        "[I; 2084298949, 1790791589, -1276049868, -626425377]",
+        NbtTag::IntArray(vec![2084298949, 1790791589, -1276049868, -626425377])
+    );
+    assert_parse!("[B;]", NbtTag::ByteArray(Bytes::new()));
 }
 
 #[test]
