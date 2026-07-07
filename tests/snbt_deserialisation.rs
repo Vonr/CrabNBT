@@ -24,6 +24,8 @@ fn wrap(tag: NbtTag) -> NbtTag {
 #[test]
 fn nbt_tag() {
     assert_eq!(tag_helper("Hello"), NbtTag::String("Hello".to_owned()));
+    assert_parse!(r#""true""#, NbtTag::String("true".to_string()));
+    assert_parse!(r#""false""#, NbtTag::String("false".to_string()));
 }
 
 #[test]
@@ -68,15 +70,6 @@ fn nbt_uuids() {
 }
 
 #[test]
-fn nbt_arrays() {
-    assert_parse!(
-        "[I; 2084298949, 1790791589, -1276049868, -626425377]",
-        NbtTag::IntArray(vec![2084298949, 1790791589, -1276049868, -626425377])
-    );
-    assert_parse!("[B;]", NbtTag::ByteArray(Bytes::new()));
-}
-
-#[test]
 fn nbt_compound() {
     assert_eq!(
         NbtCompound::from_str("{components:[]}").unwrap(),
@@ -91,7 +84,7 @@ fn nbt_compound() {
 fn nbt_numbers() {
     assert_parse!("1e7f", NbtTag::Float(1e7));
     assert_parse!("1e7", NbtTag::Double(1e7));
-    // assert_parse!("0.0_4E10f", NbtTag::Float(0.0_4E10));
+    assert_parse!("0.0_4E10f", NbtTag::Float(0.0_4E10));
     assert_parse!("10", NbtTag::Int(10));
     assert_parse!("-25", NbtTag::Int(-25));
     assert_parse!("5b", NbtTag::Byte(5));
@@ -112,8 +105,23 @@ fn nbt_numbers() {
     assert_parse!("bool(0)", FALSE);
     assert_parse!("bool(-0.9999999F)", FALSE);
     assert_parse!("bool(-0.9999999D)", FALSE);
-    assert_parse!("bool(true)", TRUE);
-    assert_parse!("bool(false)", FALSE);
+    assert_parse!("bool(TRuE)", TRUE);
+    assert_parse!("bool(faLSe)", FALSE);
+}
+
+#[test]
+fn nbt_arrays() {
+    assert_parse!(
+        "[I; 2084298949, 1790791589, -1276049868, -626425377]",
+        NbtTag::IntArray(vec![2084298949, 1790791589, -1276049868, -626425377])
+    );
+    assert_parse!("[B;]", NbtTag::ByteArray(Bytes::new()));
+    assert_parse!("[I;]", NbtTag::IntArray(Vec::new()));
+    assert_parse!("[I; 0, 1B, 2S, 3I]", NbtTag::IntArray(vec![0, 1, 2, 3]));
+    assert_parse!(
+        "[B; 0, 0b1b, 2, 0x3]",
+        NbtTag::ByteArray(vec![0, 1, 2, 3].into())
+    );
 }
 
 #[test]
@@ -123,6 +131,8 @@ fn nbt_fails() {
     assert_matches!("1a".parse::<NbtTag>(), Err(_));
     assert_matches!("0x".parse::<NbtTag>(), Err(_));
     assert_matches!("_1E1".parse::<NbtTag>(), Err(_));
+    assert_matches!("._1E1".parse::<NbtTag>(), Err(_));
+    assert_matches!("_.1E1".parse::<NbtTag>(), Err(_));
     assert_matches!("1_E1".parse::<NbtTag>(), Err(_));
     assert_matches!("1E_1".parse::<NbtTag>(), Err(_));
     assert_matches!("1E1_".parse::<NbtTag>(), Err(_));

@@ -6,13 +6,12 @@ use derive_more::From;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io::Cursor;
 use std::mem::{discriminant, Discriminant};
-use std::str::FromStr;
 
 use crate::nbt::error::SnbtDeserialisationError;
-use crate::nbt::snbt::de::numbers::{may_start_number, read_number_or_numboid_const};
+use crate::nbt::snbt::de::numbers::{may_start_number, read_number_or_numboid_const, NumberType};
 use crate::nbt::snbt::de::utils::{
-    consume_whitespace, expect_char, expect_str, impl_FromStr_through_FromVisitor,
-    read_slice_while, read_string, FromVisitor, StrVisitor,
+    consume_whitespace, expect_char, expect_str, expect_str_ignore_case,
+    impl_FromStr_through_FromVisitor, read_slice_while, read_string, FromVisitor, StrVisitor,
 };
 
 use crate::nbt::list::NbtList;
@@ -385,9 +384,9 @@ impl FromVisitor for NbtTag {
             }
             c if may_start_number(c) => read_number_or_numboid_const(visitor),
             _ => {
-                if expect_str(visitor, "true").is_ok() {
+                if expect_str_ignore_case(visitor, "true").is_ok() {
                     Ok(TRUE)
-                } else if expect_str(visitor, "false").is_ok() {
+                } else if expect_str_ignore_case(visitor, "false").is_ok() {
                     Ok(FALSE)
                 } else if expect_str(visitor, "bool(").is_ok() {
                     consume_whitespace(visitor);
@@ -447,9 +446,9 @@ fn uuid_from_str(s: &str) -> Result<Vec<i32>, SnbtDeserialisationError> {
         .enumerate()
     {
         if i >= bytes.len() {
-            todo!("better error structures");
+            return Err(SnbtDeserialisationError::UuidTooManyBytes);
         }
-        bytes[i] = res.expect("todo: better error structures");
+        bytes[i] = res.map_err(SnbtDeserialisationError::ParseIntError)?;
     }
     // Transmuting here is preferable over producing the slices manually
     // (e.g. bytes[0..4], bytes[4..8] etc.), because as of Rust 2024,
@@ -522,25 +521,58 @@ fn read_list(visitor: &mut StrVisitor) -> Result<Vec<NbtTag>, SnbtDeserialisatio
     Ok(content)
 }
 
-/// Reads an SNBT array of type Number,
-/// assuming the array identifier (e.g. `[I;`) has already been consumed, save for the semicolon.
 fn read_snbt_array<Number>(
     visitor: &mut StrVisitor,
 ) -> Result<Vec<Number>, SnbtDeserialisationError>
 where
-    Number: FromStr,
-    // TODO: Remove me after better error structures
-    Number::Err: std::error::Error,
+    Number: PrimitiveNumber + From<i8> + TryFrom<i16> + TryFrom<i32> + TryFrom<i64>,
+    SnbtDeserialisationError: From<<Number as TryFrom<i16>>::Error>
+        + From<<Number as TryFrom<i32>>::Error>
+        + From<<Number as TryFrom<i64>>::Error>,
 {
     consume_whitespace(visitor);
     // This was missing once. It took me days to find that bug!
     expect_char(visitor, ';', ";")?;
-    let mut content = vec![];
+    let mut content: Vec<Number> = vec![];
     loop {
         consume_whitespace(visitor);
-        let slice = read_slice_while(visitor, |c| c.is_ascii_digit() || c == '-');
-        if !slice.is_empty() {
-            content.push(slice.parse().expect("todo: better error structures"));
+        if visitor.peek() != Some(']') {
+            let num = crate::nbt::snbt::de::numbers::read_number(
+                visitor,
+                Some(Number::number_type()),
+                None,
+            )?;
+            match num {
+                NbtTag::Byte(num) => content.push(num.into()),
+                NbtTag::Short(num) => {
+                    if Number::bits() >= i16::bits() {
+                        content.push(num.try_into()?)
+                    } else {
+                        return Err(SnbtDeserialisationError::from_visitor(visitor, "byte"));
+                    }
+                }
+                NbtTag::Int(num) => {
+                    if Number::bits() >= i32::bits() {
+                        content.push(num.try_into()?)
+                    } else {
+                        return Err(SnbtDeserialisationError::from_visitor(
+                            visitor,
+                            "short or byte",
+                        ));
+                    }
+                }
+                NbtTag::Long(num) => {
+                    if Number::bits() >= i64::bits() {
+                        content.push(num.try_into()?)
+                    } else {
+                        return Err(SnbtDeserialisationError::from_visitor(
+                            visitor,
+                            "int, short, or byte",
+                        ));
+                    }
+                }
+                _ => return Err(SnbtDeserialisationError::from_visitor(visitor, "number")),
+            }
         }
 
         consume_whitespace(visitor);
@@ -553,6 +585,51 @@ where
         }
     }
     Ok(content)
+}
+
+trait PrimitiveNumber: Sized {
+    fn bits() -> u32;
+    fn number_type() -> NumberType;
+}
+
+impl PrimitiveNumber for i8 {
+    fn bits() -> u32 {
+        Self::BITS
+    }
+
+    fn number_type() -> NumberType {
+        NumberType::Byte
+    }
+}
+
+impl PrimitiveNumber for i16 {
+    fn bits() -> u32 {
+        Self::BITS
+    }
+
+    fn number_type() -> NumberType {
+        NumberType::Short
+    }
+}
+
+impl PrimitiveNumber for i32 {
+    fn bits() -> u32 {
+        Self::BITS
+    }
+
+    fn number_type() -> NumberType {
+        NumberType::Integer
+    }
+}
+
+impl PrimitiveNumber for i64 {
+    fn bits() -> u32 {
+        64
+    }
+
+    fn number_type() -> NumberType {
+        NumberType::Long
+    }
 }
 
 #[cfg(test)]

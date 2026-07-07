@@ -1,4 +1,4 @@
-use std::num::{ParseFloatError, ParseIntError};
+use std::num::{ParseFloatError, ParseIntError, TryFromIntError};
 
 use crate::nbt::snbt::de::{
     numbers::{NumberType, Radix, Signedness},
@@ -13,13 +13,28 @@ pub enum SnbtDeserialisationError {
     ParseFloatError(ParseFloatError),
     #[error(transparent)]
     ParseIntError(ParseIntError),
-
+    #[error(transparent)]
+    TryFromIntError(TryFromIntError),
+    #[error("Too many bytes for UUID")]
+    UuidTooManyBytes,
     #[error("Expected {expected} at position {index}: {offending_area} <--[HERE]")]
     Unexpected {
         index: usize,
         offending_area: String,
         expected: &'static str,
     },
+}
+
+impl From<TryFromIntError> for SnbtDeserialisationError {
+    fn from(value: TryFromIntError) -> Self {
+        Self::TryFromIntError(value)
+    }
+}
+
+impl From<std::convert::Infallible> for SnbtDeserialisationError {
+    fn from(_: std::convert::Infallible) -> Self {
+        unreachable!()
+    }
 }
 
 const MAX_OFFENSE_INFO_LENGTH: usize = 12;
