@@ -10,15 +10,6 @@ macro_rules! assert_parse {
     };
 }
 
-macro_rules! assert_parse_failure {
-    ($input:expr) => {
-        ::std::assert_matches!($input.parse::<NbtTag>(), Err(_))
-    };
-    ($input:expr, $err:expr) => {
-        assert_eq!($input.parse::<NbtTag>(), Err($err))
-    };
-}
-
 fn tag_helper(s: &str) -> NbtTag {
     NbtTag::from_str(s).unwrap()
 }
@@ -157,5 +148,5 @@ fn nbt_strings() {
     );
 
     // Minecraft does not follow UAX44-LM2 (loose matching)
-    assert_parse_failure!(r#""\N{Low-Line}""#);
+    assert_matches!(NbtTag::from_str(r#""\N{Low-Line}""#), Err(_));
 }
