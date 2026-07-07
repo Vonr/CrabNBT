@@ -477,7 +477,6 @@ fn read_list(visitor: &mut StrVisitor) -> Result<NbtList, SnbtDeserialisationErr
     }
 
     let content = content.into();
-    eprintln!("{content:#?}");
     Ok(content)
 }
 
