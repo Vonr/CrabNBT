@@ -24,6 +24,8 @@ simd_cesu8 = "1.0.1"
 derive_more = { version = "2.0.1", features = ["into", "from"] }
 thiserror = "2.0.11"
 serde = { version = "1.0.218", optional = true, features = ["derive"] }
+# Pin to version 1 as 2 and above follow UAX44-LM2 (loose matching), which Minecraft does not
+unicode_names2 = "1"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }

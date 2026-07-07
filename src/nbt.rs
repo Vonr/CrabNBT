@@ -1,4 +1,6 @@
 use crate::error::Error;
+use crate::nbt::snbt::de::utils::{FromVisitor, impl_FromStr_through_FromVisitor, StrVisitor, consume_whitespace, expect_char, read_string};
+use crate::nbt::error::SnbtDeserialisationError;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use crab_nbt::nbt::compound::NbtCompound;
 use crab_nbt::nbt::tag::NbtTag;
@@ -8,6 +10,8 @@ use std::io::{Cursor, Write};
 use std::ops::Deref;
 
 pub mod compound;
+pub mod error;
+pub(crate) mod snbt;
 pub mod tag;
 pub mod utils;
 
@@ -126,3 +130,28 @@ impl Display for Nbt {
         write!(f, "{{\"{}\": {}}}", self.name, self.root_tag)
     }
 }
+
+impl FromVisitor for Nbt {
+    type Err = SnbtDeserialisationError;
+
+    fn from_visitor(visitor: &mut StrVisitor) -> Result<Self, Self::Err> {
+        expect_char(visitor, '{', "{")?;
+        consume_whitespace(visitor);
+
+        let name = read_string(visitor)?;
+        consume_whitespace(visitor);
+
+        expect_char(visitor, ':', ":")?;
+        consume_whitespace(visitor);
+
+        let root_tag = NbtCompound::from_visitor(visitor)?;
+        consume_whitespace(visitor);
+        expect_char(visitor, '}', "}")?;
+
+        Ok(Self {
+            name,
+            root_tag
+        })
+    }
+}
+impl_FromStr_through_FromVisitor!(Nbt);

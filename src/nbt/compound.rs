@@ -1,3 +1,5 @@
+use crate::nbt::snbt::de::utils::{impl_FromStr_through_FromVisitor, FromVisitor, StrVisitor, consume_whitespace, expect_char, read_string};
+use crate::nbt::error::SnbtDeserialisationError;
 use crate::nbt::utils::{escape_name, join_formatted};
 use crate::{error::Error, Nbt};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
@@ -178,3 +180,35 @@ impl Display for NbtCompound {
         write!(f, "}}")
     }
 }
+
+impl FromVisitor for NbtCompound {
+    type Err = SnbtDeserialisationError;
+
+    fn from_visitor(visitor: &mut StrVisitor) -> Result<Self, Self::Err> {
+        expect_char(visitor, '{', "{")?;
+
+        let mut child_tags = vec![];
+        while let Some(c) = visitor.peek() {
+            if c == '}' {
+                _ = visitor.next();
+                return Ok(NbtCompound { child_tags });
+            }
+            consume_whitespace(visitor);
+            let name = read_string(visitor)?;
+            
+            consume_whitespace(visitor);
+            expect_char(visitor, ':', ":")?;
+            consume_whitespace(visitor);
+
+            let tag = NbtTag::from_visitor(visitor)?;
+            consume_whitespace(visitor);
+            if visitor.peek().filter(|c| *c == '}').is_none() {
+                expect_char(visitor, ',', ",")?;
+            }
+
+            child_tags.push((name, tag));
+        }
+        Err(SnbtDeserialisationError::from_visitor(visitor, "}"))
+    }
+}
+impl_FromStr_through_FromVisitor!(NbtCompound);
