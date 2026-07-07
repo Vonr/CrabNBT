@@ -183,33 +183,57 @@ fn read_number(visitor: &mut StrVisitor) -> Result<NbtTag, SnbtDeserialisationEr
     let mut can_have_radix_prefix = visitor.peek().is_some_and(|c: char| c == '0');
     // Radices are defined at the second index, so we have to track this as well
     let mut has_read_once = false;
-    let num_str = read_slice_while_skipping(visitor, |c| {
+    let slice = &visitor.get_slice()[visitor.get_position()..];
+    let mut num_end: usize = 0;
+    while let Some(c) = visitor.peek() {
         if has_read_once && can_have_radix_prefix {
             match c {
                 'b' => radix = Radix::Binary,
                 'x' => radix = Radix::Hexadecimal,
                 // Decimal case
-                c if c.is_ascii_digit() || c == '.' => { },
-                _ => return ReaderAction::Abort
+                c if c.is_ascii_digit() || c == '.' => {}
+                _ => break,
             }
             can_have_radix_prefix = false;
-            return ReaderAction::Accept;
+            num_end += 1;
+            visitor.next().unwrap();
+            continue;
         }
         has_read_once = true;
         match c {
             '.' => {
                 is_float_only = true;
-                ReaderAction::Accept
-            },
+                num_end += 1;
+                visitor.next().unwrap();
+                continue;
+            }
             'e' | 'E' if radix != Radix::Hexadecimal => {
                 is_float_only = true;
-                ReaderAction::Accept
+                num_end += 1;
+                visitor.next().unwrap();
+                continue;
             }
-            '_' => ReaderAction::Skip,
-            c if radix.check_character(c) => ReaderAction::Accept,
-            _ => ReaderAction::Abort
+            '_' => {
+                if visitor.peek().is_none_or(|c| matches!(c, '0'..='9')) {
+                    num_end += 1;
+                    visitor.next().unwrap();
+                    continue;
+                } else {
+                    return Err(SnbtDeserialisationError::from_visitor(
+                        visitor,
+                        "number should come after _",
+                    ));
+                }
+            }
+            c if radix.check_character(c) => {
+                num_end += 1;
+                visitor.next().unwrap();
+                continue;
+            }
+            _ => break,
         }
-    });
+    }
+    let num_str = &slice[..num_end];
     // match &num_str {
     //     Cow::Borrowed(b) => println!("Borrowed({b})"),
     //     Cow::Owned(o) => println!("Owned({o})")

@@ -195,7 +195,13 @@ impl FromVisitor for NbtCompound {
             }
             consume_whitespace(visitor);
             let name = read_string(visitor)?;
-            
+            if name.is_empty() {
+                return Err(SnbtDeserialisationError::from_visitor(
+                    visitor,
+                    "key cannot be empty",
+                ));
+            }
+
             consume_whitespace(visitor);
             expect_char(visitor, ':', ":")?;
             consume_whitespace(visitor);
