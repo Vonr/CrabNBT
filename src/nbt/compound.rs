@@ -199,11 +199,11 @@ impl FromVisitor for NbtCompound {
 
         let mut child_tags = vec![];
         while let Some(c) = visitor.peek() {
+            consume_whitespace(visitor);
             if c == '}' {
                 _ = visitor.next();
                 return Ok(NbtCompound { child_tags });
             }
-            consume_whitespace(visitor);
             let name = read_string(visitor)?;
             if name.is_empty() {
                 return Err(SnbtDeserialisationError::from_visitor(
@@ -220,6 +220,7 @@ impl FromVisitor for NbtCompound {
             consume_whitespace(visitor);
             if visitor.peek().filter(|c| *c == '}').is_none() {
                 expect_char(visitor, ',', ",")?;
+                consume_whitespace(visitor);
             }
 
             child_tags.push((name, tag));
