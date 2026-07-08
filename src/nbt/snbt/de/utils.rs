@@ -1,4 +1,4 @@
-use std::num::{NonZeroUsize, ParseIntError};
+use std::num::ParseIntError;
 use std::{borrow::Cow, fmt::Debug, iter::FusedIterator, result::Result as StdResult};
 
 use crate::nbt::error::SnbtDeserialisationError;
