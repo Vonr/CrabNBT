@@ -15,14 +15,28 @@ pub enum SnbtDeserialisationError {
     ParseIntError(ParseIntError),
     #[error(transparent)]
     TryFromIntError(TryFromIntError),
-    #[error("Too many bytes for UUID")]
-    UuidTooManyBytes,
+    #[error("UUID should contain at most 32 hexadecimal digits and 4 dashes")]
+    UuidStringTooBig,
+    #[error("UUID only has {0} of 4 dashes")]
+    UuidNotEnoughDashes(u8),
     #[error("Expected {expected} at position {index}: {offending_area} <--[HERE]")]
     Unexpected {
         index: usize,
         offending_area: String,
         expected: &'static str,
     },
+}
+
+impl From<ParseFloatError> for SnbtDeserialisationError {
+    fn from(value: ParseFloatError) -> Self {
+        Self::ParseFloatError(value)
+    }
+}
+
+impl From<ParseIntError> for SnbtDeserialisationError {
+    fn from(value: ParseIntError) -> Self {
+        Self::ParseIntError(value)
+    }
 }
 
 impl From<TryFromIntError> for SnbtDeserialisationError {

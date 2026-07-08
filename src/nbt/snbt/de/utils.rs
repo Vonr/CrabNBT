@@ -462,21 +462,13 @@ fn parse_escape_sequence(visitor: &mut StrVisitor) -> Result<char> {
         'r' => '\r',
         's' => ' ',
         't' => '\t',
-        'x' => parse_hexadecimal_as_char::<_, _, std::convert::Infallible, _>(
-            visitor,
-            u8::from_str_radix,
-            2,
-        )?,
-        'u' => parse_hexadecimal_as_char::<_, _, std::convert::Infallible, _>(
+        'x' => parse_hexadecimal_as_char(visitor, u8::from_str_radix, 2)?,
+        'u' => parse_hexadecimal_as_char(
             visitor,
             |s, r| u16::from_str_radix(s, r).map(|i| i as u32),
             4,
         )?,
-        'U' => parse_hexadecimal_as_char::<_, _, std::convert::Infallible, _>(
-            visitor,
-            u32::from_str_radix,
-            8,
-        )?,
+        'U' => parse_hexadecimal_as_char(visitor, u32::from_str_radix, 8)?,
         'N' => {
             expect_char(visitor, '{', "{")?;
             let c = parse_unicode_name(visitor)?;
@@ -492,7 +484,7 @@ fn parse_escape_sequence(visitor: &mut StrVisitor) -> Result<char> {
     })
 }
 
-fn parse_hexadecimal_as_char<N: TryInto<char, Error = E2>, E2, E, M>(
+fn parse_hexadecimal_as_char<N: TryInto<char, Error = E2>, E2, M>(
     visitor: &mut StrVisitor,
     parser: M,
     num_expected: usize,
@@ -510,8 +502,7 @@ where
             "C hexadecimal characters",
         ))
     } else {
-        Ok(parser(hex, 16)
-            .map_err(SnbtDeserialisationError::ParseIntError)?
+        Ok(parser(hex, 16)?
             .try_into()
             .expect("todo: better error structures"))
     }

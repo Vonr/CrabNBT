@@ -11,7 +11,8 @@ use crate::nbt::error::SnbtDeserialisationError;
 use crate::nbt::snbt::de::numbers::{may_start_number, read_number_or_numboid_const, NumberType};
 use crate::nbt::snbt::de::utils::{
     consume_whitespace, expect_char, expect_str, expect_str_ignore_case,
-    impl_FromStr_through_FromVisitor, read_slice_while, read_string, FromVisitor, StrVisitor,
+    impl_FromStr_through_FromVisitor, read_quoted_string, read_slice_while, read_string,
+    FromVisitor, StrVisitor,
 };
 
 use crate::nbt::list::NbtList;
@@ -381,7 +382,7 @@ impl FromVisitor for NbtTag {
                     Ok(tag)
                 } else if expect_str(visitor, "uuid(").is_ok() {
                     consume_whitespace(visitor);
-                    let tag = uuid_from_str(&read_string(visitor)?)
+                    let tag = uuid_from_str(&read_quoted_string(visitor)?)
                         .map(Vec::from)
                         .map(NbtTag::IntArray);
 
@@ -413,30 +414,54 @@ fn write_listlike<T: Display, I: IntoIterator<Item = T>>(
     write!(f, "]")
 }
 
-fn uuid_from_str(s: &str) -> Result<[i32; 4], SnbtDeserialisationError> {
-    const UUID_V4_SIZE: usize = 16;
-    type Out = i32;
-
-    let mut bytes = [0u8; UUID_V4_SIZE];
-    for (i, res) in s
-        .split('-')
-        .flat_map(|substr| {
-            (0..(substr.len() / 2)).map(|i| &substr[2 * i..(2 * (i + 1)).min(substr.len())])
-        })
-        .map(|s| u8::from_str_radix(s, 16))
-        .enumerate()
-    {
-        if i >= bytes.len() {
-            return Err(SnbtDeserialisationError::UuidTooManyBytes);
-        }
-        bytes[i] = res.map_err(SnbtDeserialisationError::ParseIntError)?;
+fn uuid_from_str(name: &str) -> Result<[i32; 4], SnbtDeserialisationError> {
+    // 32 hex digits + 4 dashes
+    let len = name.len();
+    if len > 36 {
+        return Err(SnbtDeserialisationError::UuidStringTooBig);
     }
 
-    let chunks = bytes.as_chunks::<{ size_of::<Out>() }>().0;
-    let parts: [Out; UUID_V4_SIZE / size_of::<Out>()] =
-        std::array::from_fn(|i| Out::from_be_bytes(chunks[i]));
+    let mut dashes = name
+        .chars()
+        .enumerate()
+        .filter(|(_, c)| *c == '-')
+        .map(|(i, _)| i);
 
-    Ok(parts)
+    let Some(dash_1) = dashes.next() else {
+        return Err(SnbtDeserialisationError::UuidNotEnoughDashes(0));
+    };
+    let Some(dash_2) = dashes.next() else {
+        return Err(SnbtDeserialisationError::UuidNotEnoughDashes(1));
+    };
+    let Some(dash_3) = dashes.next() else {
+        return Err(SnbtDeserialisationError::UuidNotEnoughDashes(2));
+    };
+    let Some(dash_4) = dashes.next() else {
+        return Err(SnbtDeserialisationError::UuidNotEnoughDashes(3));
+    };
+
+    if dashes.next().is_some() {
+        return Err(SnbtDeserialisationError::UuidStringTooBig);
+    }
+
+    let mut msb = u64::from_str_radix(&name[..dash_1], 16)? & 0xFFFF_FFFF;
+    msb <<= 16;
+    msb |= u64::from_str_radix(&name[dash_1 + 1..dash_2], 16)? & 0xFFFF;
+    msb <<= 16;
+    msb |= u64::from_str_radix(&name[dash_2 + 1..dash_3], 16)? & 0xFFFF;
+
+    let mut lsb = u64::from_str_radix(&name[dash_3 + 1..dash_4], 16)? & 0xFFFF;
+    lsb <<= 48;
+    lsb |= u64::from_str_radix(&name[dash_4 + 1..], 16)? & 0xFFFF_FFFF_FFFF;
+
+    let &[a, b] = msb.to_be_bytes().as_chunks::<4>().0 else {
+        unreachable!()
+    };
+    let &[c, d] = lsb.to_be_bytes().as_chunks::<4>().0 else {
+        unreachable!()
+    };
+
+    Ok([a, b, c, d].map(i32::from_be_bytes))
 }
 
 const LIST_SEPARATOR_MSG: &'static str = ", or ]";
@@ -486,17 +511,24 @@ where
                 Some(Number::number_type()),
                 None,
             )?;
+
+            // Only allow number that have an equal or smaller width than the type of the array
             match num {
+                // Byte is the smallest number, so conversion to a larger one always succeeds
                 NbtTag::Byte(num) => content.push(num.into()),
                 NbtTag::Short(num) => {
-                    if Number::bits() >= i16::bits() {
+                    // Only accept Short if the width type of the array is equal or larger than the width of a Short,
+                    // otherwise, return an error to say we are only expecting smaller numbers
+                    if Number::bits() >= i16::BITS {
                         content.push(num.try_into()?)
                     } else {
                         return Err(SnbtDeserialisationError::from_visitor(visitor, "byte"));
                     }
                 }
                 NbtTag::Int(num) => {
-                    if Number::bits() >= i32::bits() {
+                    // Only accept Int if the width type of the array is equal or larger than the width of an Int,
+                    // otherwise, return an error to say we are only expecting smaller numbers
+                    if Number::bits() >= i32::BITS {
                         content.push(num.try_into()?)
                     } else {
                         return Err(SnbtDeserialisationError::from_visitor(
@@ -506,7 +538,9 @@ where
                     }
                 }
                 NbtTag::Long(num) => {
-                    if Number::bits() >= i64::bits() {
+                    // Only accept Long if the width type of the array is equal or larger than the width of a Long,
+                    // otherwise, return an error to say we are only expecting smaller numbers
+                    if Number::bits() >= i64::BITS {
                         content.push(num.try_into()?)
                     } else {
                         return Err(SnbtDeserialisationError::from_visitor(
