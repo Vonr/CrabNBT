@@ -1,6 +1,9 @@
 use crate::error::Error;
-use crate::nbt::snbt::de::utils::{FromVisitor, impl_FromStr_through_FromVisitor, StrVisitor, consume_whitespace, expect_char, read_string};
 use crate::nbt::error::SnbtDeserialisationError;
+use crate::nbt::snbt::de::utils::{
+    consume_whitespace, expect_char, impl_FromStr_through_FromVisitor, read_string, FromVisitor,
+    StrVisitor,
+};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use crab_nbt::nbt::compound::NbtCompound;
 use crab_nbt::nbt::tag::NbtTag;
@@ -11,8 +14,8 @@ use std::ops::Deref;
 
 pub mod compound;
 pub mod error;
-pub(crate) mod snbt;
 pub mod list;
+pub(crate) mod snbt;
 pub mod tag;
 pub mod utils;
 
@@ -33,7 +36,7 @@ impl Nbt {
     }
 
     pub fn read(bytes: &mut impl Buf) -> Result<Nbt, Error> {
-        let tag_type_id = bytes.get_u8();
+        let tag_type_id = bytes.try_get_u8()?;
 
         if tag_type_id != COMPOUND_ID {
             return Err(Error::NoRootCompound(tag_type_id));
@@ -52,7 +55,7 @@ impl Nbt {
     /// Reads an NBT tag that doesn't contain the name of the root compound.
     /// Used in [Network NBT](https://wiki.vg/NBT#Network_NBT_(Java_Edition)).
     pub fn read_unnamed(bytes: &mut impl Buf) -> Result<Nbt, Error> {
-        let tag_type_id = bytes.get_u8();
+        let tag_type_id = bytes.try_get_u8()?;
 
         if tag_type_id != COMPOUND_ID {
             return Err(Error::NoRootCompound(tag_type_id));
@@ -149,10 +152,7 @@ impl FromVisitor for Nbt {
         consume_whitespace(visitor);
         expect_char(visitor, '}', "}")?;
 
-        Ok(Self {
-            name,
-            root_tag
-        })
+        Ok(Self { name, root_tag })
     }
 }
 impl_FromStr_through_FromVisitor!(Nbt);

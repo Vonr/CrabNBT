@@ -97,7 +97,7 @@ impl NbtTag {
     }
 
     pub fn deserialize(bytes: &mut impl Buf) -> Result<NbtTag, Error> {
-        let tag_id = bytes.get_u8();
+        let tag_id = bytes.try_get_u8()?;
         Self::deserialize_data(bytes, tag_id)
     }
 
@@ -109,38 +109,38 @@ impl NbtTag {
         match tag_id {
             END_ID => Ok(NbtTag::End),
             BYTE_ID => {
-                let byte = bytes.get_i8();
+                let byte = bytes.try_get_i8()?;
                 Ok(NbtTag::Byte(byte))
             }
             SHORT_ID => {
-                let short = bytes.get_i16();
+                let short = bytes.try_get_i16()?;
                 Ok(NbtTag::Short(short))
             }
             INT_ID => {
-                let int = bytes.get_i32();
+                let int = bytes.try_get_i32()?;
                 Ok(NbtTag::Int(int))
             }
             LONG_ID => {
-                let long = bytes.get_i64();
+                let long = bytes.try_get_i64()?;
                 Ok(NbtTag::Long(long))
             }
             FLOAT_ID => {
-                let float = bytes.get_f32();
+                let float = bytes.try_get_f32()?;
                 Ok(NbtTag::Float(float))
             }
             DOUBLE_ID => {
-                let double = bytes.get_f64();
+                let double = bytes.try_get_f64()?;
                 Ok(NbtTag::Double(double))
             }
             BYTE_ARRAY_ID => {
-                let len = bytes.get_i32() as usize;
+                let len = bytes.try_get_i32()? as usize;
                 let byte_array = bytes.copy_to_bytes(len);
                 Ok(NbtTag::ByteArray(byte_array))
             }
             STRING_ID => Ok(NbtTag::String(get_nbt_string(bytes).unwrap())),
             LIST_ID => {
-                let tag_type_id = bytes.get_u8();
-                let len = bytes.get_i32();
+                let tag_type_id = bytes.try_get_u8()?;
+                let len = bytes.try_get_i32()?;
                 let list = std::iter::repeat_n((), len as usize)
                     .map(|_| NbtTag::deserialize_data(bytes, tag_type_id))
                     .collect::<Result<Vec<_>, _>>()?
@@ -151,14 +151,14 @@ impl NbtTag {
             INT_ARRAY_ID => {
                 const BYTES: usize = size_of::<i32>();
 
-                let len = bytes.get_i32() as usize;
+                let len = bytes.try_get_i32()? as usize;
                 let numbers = read_array::<i32, BYTES, _>(bytes, len, i32::from_be_bytes);
                 Ok(NbtTag::IntArray(numbers))
             }
             LONG_ARRAY_ID => {
                 const BYTES: usize = size_of::<i64>();
 
-                let len = bytes.get_i32() as usize;
+                let len = bytes.try_get_i32()? as usize;
                 let numbers = read_array::<i64, BYTES, _>(bytes, len, i64::from_be_bytes);
                 Ok(NbtTag::LongArray(numbers))
             }
