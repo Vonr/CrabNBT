@@ -3,5 +3,5 @@
     "\N{Snowman}": '\u2744',
     bools: [bool(-0.999F), bool(0.999D), bool(0), bool(10), bool(FAlsE), bool(tRue)],
     uuids: [uuid("00000000-0000-0000-0000-000000000000"), [I; 0, 0B, 0S, 0I]],
-    not_numbers: ["0", "1b"]
+    not_numbers: ["0", "1b"],
 }
