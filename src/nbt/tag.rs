@@ -387,7 +387,9 @@ impl FromVisitor for NbtTag {
                     Ok(tag)
                 } else if expect_str(visitor, "uuid(").is_ok() {
                     consume_whitespace(visitor);
-                    let tag = uuid_from_str(&read_string(visitor)?).map(NbtTag::IntArray);
+                    let tag = uuid_from_str(&read_string(visitor)?)
+                        .map(Vec::from)
+                        .map(NbtTag::IntArray);
 
                     consume_whitespace(visitor);
                     expect_char(visitor, ')', ")")?;
@@ -417,7 +419,7 @@ fn write_listlike<T: Display, I: IntoIterator<Item = T>>(
     write!(f, "]")
 }
 
-fn uuid_from_str(s: &str) -> Result<Vec<i32>, SnbtDeserialisationError> {
+fn uuid_from_str(s: &str) -> Result<[i32; 4], SnbtDeserialisationError> {
     const UUID_V4_SIZE: usize = 16;
     type Out = i32;
 
@@ -435,24 +437,12 @@ fn uuid_from_str(s: &str) -> Result<Vec<i32>, SnbtDeserialisationError> {
         }
         bytes[i] = res.map_err(SnbtDeserialisationError::ParseIntError)?;
     }
-    // Transmuting here is preferable over producing the slices manually
-    // (e.g. bytes[0..4], bytes[4..8] etc.), because as of Rust 2024,
-    // RangeIndexing an array gives a slice, whose size is unknown at compile time.
-    // i32::from_be_bytes requires moving an array into it to work,
-    // so we would either have to copy the array or use a different method (of which I am not aware)
-    //
-    // SAFETY:
-    //  Arrays are purely groups of data whose size is determined at compile time.
-    //  More specifically, an array [T;N]'s size is determined by size_of::<T>()*N
-    //      and an element arr[i] is offset by i*size_of::<T>() bytes.
-    //  This means that [[T;N];M] has the same layout as a [T;N*M] with respect to its values.
-    //  Ergo, transmuting here is safe, because we don't change the bounds of any elements.
-    let parts: [[u8; size_of::<Out>()]; UUID_V4_SIZE / size_of::<Out>()] =
-        unsafe { std::mem::transmute(bytes) };
-    Ok(parts
-        .into_iter()
-        .map(|int_bytes| Out::from_be_bytes(int_bytes))
-        .collect())
+
+    let chunks = bytes.as_chunks::<{ size_of::<Out>() }>().0;
+    let parts: [Out; UUID_V4_SIZE / size_of::<Out>()] =
+        std::array::from_fn(|i| Out::from_be_bytes(chunks[i]));
+
+    Ok(parts)
 }
 
 const LIST_SEPARATOR_MSG: &'static str = ", or ]";
