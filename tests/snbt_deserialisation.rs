@@ -1,4 +1,3 @@
-use std::assert_matches;
 use std::str::FromStr as _;
 
 use bytes::Bytes;
@@ -24,7 +23,7 @@ fn nbt_tag() {
 #[test]
 fn nbt_list() {
     assert_eq!(tag_helper("[]"), NbtTag::List(NbtList::new()));
-    assert_matches!("[,]".parse::<NbtTag>(), Err(_));
+    assert!("[,]".parse::<NbtTag>().is_err());
     assert_eq!(
         tag_helper("[A,B,C ,D,      E,    F    ,   G    ]"),
         NbtTag::List(
@@ -102,7 +101,7 @@ fn nbt_compound() {
     );
 
     assert_parse!("{}", NbtTag::Compound(NbtCompound::new()));
-    assert_matches!("{,}".parse::<NbtTag>(), Err(_));
+    assert!("{,}".parse::<NbtTag>().is_err());
     assert_parse!(
         "{\"a\":1,}",
         NbtTag::Compound(NbtCompound::from_iter([("a".into(), 1.into())]))
@@ -146,7 +145,7 @@ fn nbt_arrays() {
     );
     assert_parse!("[B;]", NbtTag::ByteArray(Bytes::new()));
     assert_parse!("[I;]", NbtTag::IntArray(Vec::new()));
-    assert_matches!("[I;,]".parse::<NbtTag>(), Err(_));
+    assert!("[I;,]".parse::<NbtTag>().is_err());
     assert_parse!("[I; 0, 1B, 2S, 3I]", NbtTag::IntArray(vec![0, 1, 2, 3]));
     assert_parse!(
         "[L; 0, 1B, 2S, 3I, 4L,]",
@@ -160,18 +159,18 @@ fn nbt_arrays() {
 
 #[test]
 fn nbt_fails() {
-    assert_matches!(r#"{"": {}}"#.parse::<NbtTag>(), Err(_));
+    assert!(r#"{"": {}}"#.parse::<NbtTag>().is_err());
 
-    assert_matches!("1a".parse::<NbtTag>(), Err(_));
-    assert_matches!("0x".parse::<NbtTag>(), Err(_));
-    assert_matches!("_1E1".parse::<NbtTag>(), Err(_));
-    assert_matches!("._1E1".parse::<NbtTag>(), Err(_));
-    assert_matches!("_.1E1".parse::<NbtTag>(), Err(_));
-    assert_matches!("1_E1".parse::<NbtTag>(), Err(_));
-    assert_matches!("1E_1".parse::<NbtTag>(), Err(_));
-    assert_matches!("1E1_".parse::<NbtTag>(), Err(_));
-    assert_matches!("1E.1".parse::<NbtTag>(), Err(_));
-    assert_matches!("1E1.".parse::<NbtTag>(), Err(_));
+    assert!("1a".parse::<NbtTag>().is_err());
+    assert!("0x".parse::<NbtTag>().is_err());
+    assert!("_1E1".parse::<NbtTag>().is_err());
+    assert!("._1E1".parse::<NbtTag>().is_err());
+    assert!("_.1E1".parse::<NbtTag>().is_err());
+    assert!("1_E1".parse::<NbtTag>().is_err());
+    assert!("1E_1".parse::<NbtTag>().is_err());
+    assert!("1E1_".parse::<NbtTag>().is_err());
+    assert!("1E.1".parse::<NbtTag>().is_err());
+    assert!("1E1.".parse::<NbtTag>().is_err());
 }
 
 #[test]
@@ -192,5 +191,5 @@ fn nbt_strings() {
     );
 
     // Minecraft does not follow UAX44-LM2 (loose matching)
-    assert_matches!(NbtTag::from_str(r#""\N{Low-Line}""#), Err(_));
+    assert!(NbtTag::from_str(r#""\N{Low-Line}""#).is_err());
 }
