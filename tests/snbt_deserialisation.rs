@@ -34,7 +34,7 @@ fn nbt_list() {
         )
     );
     assert_eq!(
-        tag_helper("[A,[],B,{}]"),
+        tag_helper("[A,[],B,{},]"),
         NbtTag::List(NbtList::from_iter(vec![
             NbtTag::String("A".to_string()),
             NbtTag::List(NbtList::new()),
@@ -70,7 +70,14 @@ fn nbt_compound() {
             "components": []
         })
         .into()
-    )
+    );
+
+    assert_parse!("{}", NbtTag::Compound(NbtCompound::new()));
+    assert_matches!("{,}".parse::<NbtTag>(), Err(_));
+    assert_parse!(
+        "{\"a\":1,}",
+        NbtTag::Compound(NbtCompound::from_iter([("a".into(), 1.into())]))
+    );
 }
 
 #[test]
@@ -111,6 +118,10 @@ fn nbt_arrays() {
     assert_parse!("[B;]", NbtTag::ByteArray(Bytes::new()));
     assert_parse!("[I;]", NbtTag::IntArray(Vec::new()));
     assert_parse!("[I; 0, 1B, 2S, 3I]", NbtTag::IntArray(vec![0, 1, 2, 3]));
+    assert_parse!(
+        "[L; 0, 1B, 2S, 3I, 4L,]",
+        NbtTag::LongArray(vec![0, 1, 2, 3, 4])
+    );
     assert_parse!(
         "[B; 0, 0b1b, 2, 0x3]",
         NbtTag::ByteArray(vec![0, 1, 2, 3].into())
