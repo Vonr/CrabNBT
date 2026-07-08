@@ -202,7 +202,7 @@ pub fn read_number(
     let mut can_have_radix_prefix = visitor.peek().is_some_and(|c: char| c == '0');
     // Radices are defined at the second index, so we have to track this as well
     let mut has_read_once = false;
-    let slice = &visitor.get_slice()[visitor.get_position()..];
+    let slice = visitor.as_str();
     let mut num_end: usize = 0;
     while let Some(c) = visitor.peek() {
         if has_read_once && can_have_radix_prefix {
@@ -232,8 +232,10 @@ pub fn read_number(
                 visitor.next().unwrap();
                 continue;
             }
-            '_' if visitor.previous().is_some_and(|c| radix.check_digit(c)) => {
-                visitor.next().unwrap();
+            '_' if visitor
+                .peek_previous()
+                .is_some_and(|c| radix.check_digit(c)) =>
+            {
                 visitor.next().unwrap();
                 if visitor.peek().is_some_and(|c| radix.check_digit(c)) {
                     num_end += 1;

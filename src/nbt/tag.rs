@@ -340,13 +340,7 @@ impl FromVisitor for NbtTag {
                 consume_whitespace(visitor);
                 if visitor.next_if(|c| c == ']').is_some() {
                     Ok(NbtTag::List(NbtList::new()))
-                } else if visitor
-                    .as_str()
-                    .chars()
-                    .nth(1)
-                    .filter(|c| *c == ';')
-                    .is_some()
-                {
+                } else if visitor.peek_nth(1).filter(|c| *c == ';').is_some() {
                     // we know visitor.nth(1) will be Some and StrVisitor is fused
                     // => visitor.next must be Some
                     match visitor.next().unwrap() {
@@ -573,7 +567,7 @@ impl PrimitiveNumber for i32 {
 
 impl PrimitiveNumber for i64 {
     fn bits() -> u32 {
-        64
+        Self::BITS
     }
 
     fn number_type() -> NumberType {

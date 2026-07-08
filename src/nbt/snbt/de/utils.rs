@@ -1,12 +1,12 @@
+use std::num::{NonZeroUsize, ParseIntError};
 use std::{borrow::Cow, fmt::Debug, iter::FusedIterator, result::Result as StdResult};
-use std::num::ParseIntError;
 
 use crate::nbt::error::SnbtDeserialisationError;
 
 pub type Result<T> = std::result::Result<T, SnbtDeserialisationError>;
 
 /// A middleman trait for [`std::str::FromStr`].
-/// 
+///
 pub trait FromVisitor: Sized {
     type Err;
 
@@ -49,11 +49,16 @@ impl<'a> StrVisitor<'a> {
     }
 
     /// Returns the next char in the visitor without advancing.
-    /// 
-    /// It is guaranteed that the result of this method 
+    ///
+    /// It is guaranteed that the result of this method
     /// will be the same as the next result of [`Self::next`]
     pub fn peek(&self) -> Option<char> {
-        self.as_str().chars().next()
+        self.peek_nth(0)
+    }
+
+    /// Returns the 0-indexed nth unvisited char in the visitor without advancing.
+    pub fn peek_nth(&self, n: usize) -> Option<char> {
+        self.as_str().chars().nth(n)
     }
 
     /// Moves back to the last read character.
@@ -62,19 +67,47 @@ impl<'a> StrVisitor<'a> {
         self.peek()
     }
 
+    /// Returns the previous char in the visitor without moving back.
+    ///
+    /// It is guaranteed that the result of this method
+    /// will be the same as the next result of [`Self::previous`]
+    pub fn peek_previous(&mut self) -> Option<char> {
+        self.peek_nth_previous(0)
+    }
+
+    /// Returns the 0-indexed nth previous char in the visitor without advancing.
+    pub fn peek_nth_previous(&self, n: usize) -> Option<char> {
+        let mut pos = self.position;
+        for _ in 0..=n {
+            if pos == 0 {
+                return None;
+            }
+
+            pos = previous_char_boundary(self.slice, pos);
+        }
+        self.get_slice()[pos..].chars().next()
+    }
+
     pub fn next_if<P: FnOnce(char) -> bool>(&mut self, predicate: P) -> Option<char> {
-        self.peek().filter(|c| predicate(*c)).inspect(|_| { self.next(); })
+        self.peek().filter(|c| predicate(*c)).inspect(|_| {
+            self.next();
+        })
     }
 
     /// Try to map the next character using `mapper`,
     /// returning the result and only advancing the visitor if `mapper` returned a [`Some`].
-    pub fn next_try_map<T, F: FnOnce(Option<char>) -> Option<T>>(&mut self, mapper: F) -> Option<T> {
-        mapper(self.peek()).inspect(|_| { self.next(); })
+    pub fn next_try_map<T, F: FnOnce(Option<char>) -> Option<T>>(
+        &mut self,
+        mapper: F,
+    ) -> Option<T> {
+        mapper(self.peek()).inspect(|_| {
+            self.next();
+        })
     }
 
     /// Read at most n characters in this visitor and return both the resulting slice
     /// and the amount of characters in that slice.
-    /// 
+    ///
     /// Note that, if less than n characters remain before the visitor ends,
     /// this method will return the entire slice read before the visitor ended.
     /// If you need exactly n characters in your string, make sure to check the returned number
@@ -90,7 +123,7 @@ impl<'a> StrVisitor<'a> {
     }
 
     /// Advances the visitor by `amount` characters or until the end of the slice.
-    /// 
+    ///
     /// Returns the amount of times the visitor advanced.
     pub fn advance_by(&mut self, amount: usize) -> usize {
         let mut advances = 0usize;
@@ -108,7 +141,7 @@ impl<'a> StrVisitor<'a> {
     }
 
     pub fn get_position(&self) -> usize {
-        return self.position
+        return self.position;
     }
 
     pub fn get_slice(&self) -> &'a str {
@@ -117,9 +150,9 @@ impl<'a> StrVisitor<'a> {
 
     /// Returns the string slice after ahead and before self,
     /// if ahead is advanced at least as far as self and both refer to the same string slice.
-    /// 
+    ///
     /// If ahead is behind self, returns [`None`].
-    /// 
+    ///
     /// # Panics
     /// ...if self and ahead point to different string, even if one is a substring of the other.
     pub fn get_slice_up_to(&self, ahead: &StrVisitor<'a>) -> Option<&'a str> {
@@ -163,7 +196,7 @@ impl<'a> FusedIterator for StrVisitor<'a> {}
 
 /// Finds the next char boundary greater than index. Saturates to slice.len()
 ///
-/// This can be replaced once [`str::ceil_char_boundary`] is stabilised 
+/// This can be replaced once [`str::ceil_char_boundary`] is stabilised
 /// (requiring Rust 2025 Edition).
 /// see rust-lang/rust#93743 for more
 fn next_char_boundary(slice: &str, index: usize) -> usize {
@@ -176,7 +209,7 @@ fn next_char_boundary(slice: &str, index: usize) -> usize {
 }
 
 /// Finds the last char boundary less than index. Saturates to 0
-/// 
+///
 /// Like [`next_char_boundary`] this can be replaced
 /// once [`str::floor_char_boundary`] is stabilised.
 fn previous_char_boundary(slice: &str, index: usize) -> usize {
@@ -191,14 +224,14 @@ fn previous_char_boundary(slice: &str, index: usize) -> usize {
 pub(crate) fn expect_char(
     visitor: &mut StrVisitor,
     expected_char: char,
-    expected: &'static str
+    expected: &'static str,
 ) -> Result<()> {
     expect_condition(visitor, &|c| c == expected_char, expected).map(|_| ())
 }
 
 /// Returns [`Ok`] only if the visitor continues with a string matching `expected`.
 /// If [`Ok`] is returned the visitor will be advanced until exactly after that substring.
-/// 
+///
 /// If the visitor does not continue with `expected`,
 /// returns an [`Err`] and the visitor is not advanced at all.
 pub(crate) fn expect_str(visitor: &mut StrVisitor, expected: &'static str) -> Result<()> {
@@ -217,10 +250,12 @@ pub(crate) fn expect_str(visitor: &mut StrVisitor, expected: &'static str) -> Re
 /// returns an [`Err`] and the visitor is not advanced at all.
 pub(crate) fn expect_str_ignore_case(
     visitor: &mut StrVisitor,
-    expected: &'static str
+    expected: &'static str,
 ) -> Result<()> {
     let s = visitor.as_str();
-    if s.len() >= expected.len() && s[..expected.len()].eq_ignore_ascii_case(expected) {
+    if s.get(..expected.len())
+        .is_some_and(|start| start.eq_ignore_ascii_case(expected))
+    {
         visitor.position += expected.len();
         Ok(())
     } else {
@@ -230,12 +265,13 @@ pub(crate) fn expect_str_ignore_case(
 
 pub(crate) fn expect_any_literal(
     visitor: &mut StrVisitor,
-    expected: &mut [(&mut dyn Iterator<Item = char>, fn())]
+    expected: &mut [(&mut dyn Iterator<Item = char>, fn())],
 ) -> usize {
     let matches = 0usize;
     let mut possible_values = vec![false; expected.len()];
     for c in visitor {
-        for ((seq, fun), is_possible) in expected.iter_mut()
+        for ((seq, fun), is_possible) in expected
+            .iter_mut()
             .zip(possible_values.iter_mut())
             .filter(|(_, b)| **b)
         {
@@ -243,7 +279,7 @@ pub(crate) fn expect_any_literal(
                 None => {
                     fun();
                     *is_possible = false;
-                },
+                }
                 Some(x) => {
                     if x != c {
                         *is_possible = false
@@ -267,7 +303,8 @@ pub(crate) fn expect_condition<'a, P: FnOnce(char) -> bool>(
 }
 
 pub(crate) fn consume_while<P>(visitor: &mut StrVisitor, mut condition: P)
-    where P: FnMut(char) -> bool
+where
+    P: FnMut(char) -> bool,
 {
     while let Some(future) = visitor.peek() {
         if !condition(future) {
@@ -282,11 +319,13 @@ pub(crate) fn consume_whitespace(visitor: &mut StrVisitor) {
 }
 
 pub(crate) fn read_slice_while<'a, P>(visitor: &mut StrVisitor<'a>, condition: P) -> &'a str
-    where P: FnMut(char) -> bool
+where
+    P: FnMut(char) -> bool,
 {
     let start = visitor.clone();
     consume_while(visitor, condition);
-    start.get_slice_up_to(visitor)
+    start
+        .get_slice_up_to(visitor)
         // TODO: Remove this sketchy expect
         .expect("visitor should be further advanced than start in read_slice_while, but isn't")
 }
@@ -296,7 +335,7 @@ pub(crate) fn read_slice_while<'a, P>(visitor: &mut StrVisitor<'a>, condition: P
 pub(crate) enum ReaderAction {
     Accept,
     Skip,
-    Abort
+    Abort,
 }
 
 /// Like [`read_slice_while`], but allows skipping characters.
@@ -304,24 +343,20 @@ pub(crate) enum ReaderAction {
 /// version of the [`String`].
 pub(crate) fn read_slice_while_skipping<'a, P>(
     visitor: &mut StrVisitor<'a>,
-    mut condition: P
+    mut condition: P,
 ) -> Cow<'a, str>
-    where P: FnMut(char) -> ReaderAction
+where
+    P: FnMut(char) -> ReaderAction,
 {
     let mut break_was_skip: bool = false;
-    let starting_slice = read_slice_while(
-        visitor,
-        |c| {
-            match condition(c) {
-                ReaderAction::Accept => true,
-                ReaderAction::Abort => false,
-                ReaderAction::Skip => {
-                    break_was_skip = true;
-                    false
-                }
-            }
+    let starting_slice = read_slice_while(visitor, |c| match condition(c) {
+        ReaderAction::Accept => true,
+        ReaderAction::Abort => false,
+        ReaderAction::Skip => {
+            break_was_skip = true;
+            false
         }
-    );
+    });
     if break_was_skip {
         let mut working_string = starting_slice.to_owned();
         while let Some(read_char) = visitor.peek() {
@@ -329,11 +364,11 @@ pub(crate) fn read_slice_while_skipping<'a, P>(
                 ReaderAction::Accept => {
                     working_string.push(read_char);
                     visitor.next();
-                },
-                ReaderAction::Skip => { visitor.next(); },
-                ReaderAction::Abort => {
-                    break
                 }
+                ReaderAction::Skip => {
+                    visitor.next();
+                }
+                ReaderAction::Abort => break,
             }
         }
         Cow::Owned(working_string)
@@ -343,24 +378,21 @@ pub(crate) fn read_slice_while_skipping<'a, P>(
 }
 
 pub(crate) fn read_string(visitor: &mut StrVisitor) -> Result<String> {
-    let first_char = visitor.peek()
+    let first_char = visitor
+        .peek()
         .ok_or(SnbtDeserialisationError::from_visitor(
             visitor,
-            "quote or any unquotable character"
+            "quote or any unquotable character",
         ))?;
     match first_char {
         '"' | '\'' => read_quoted_string(visitor),
-        _ => read_unquoted_string(visitor)
+        _ => read_unquoted_string(visitor),
     }
 }
 
 pub(crate) fn read_quoted_string(visitor: &mut StrVisitor) -> Result<String> {
     let mut result = String::new();
-    let quote_char = expect_condition(
-        visitor,
-        |c| c == '"' || c == '\'',
-        "a quote character"
-    )?;
+    let quote_char = expect_condition(visitor, |c| c == '"' || c == '\'', "a quote character")?;
 
     while let Some(c) = visitor.next() {
         if c == quote_char {
@@ -372,21 +404,29 @@ pub(crate) fn read_quoted_string(visitor: &mut StrVisitor) -> Result<String> {
             result.push(c);
         }
     }
-    Err(SnbtDeserialisationError::from_visitor(visitor, "a quote character"))
+    Err(SnbtDeserialisationError::from_visitor(
+        visitor,
+        "a quote character",
+    ))
 }
 
-/// Reads an unquoted SNBT string value. 
-/// Returns an [`Err`] variant if the first character doesn't match, 
+/// Reads an unquoted SNBT string value.
+/// Returns an [`Err`] variant if the first character doesn't match,
 /// placing `visitor` over that character.
-/// 
+///
 /// This algorithm is greedy, meaning it will consume all valid characters in a sequence.
 pub(crate) fn read_unquoted_string(visitor: &mut StrVisitor) -> Result<String> {
     const START_EXPECTED: &'static str = "one of [a-zA-z]|-|\\+|\\.";
     match visitor.peek() {
-        Some(c) if char_may_start_unquoted(c) => { },
-        _ => return Err(SnbtDeserialisationError::from_visitor(visitor, START_EXPECTED))
+        Some(c) if char_may_start_unquoted(c) => {}
+        _ => {
+            return Err(SnbtDeserialisationError::from_visitor(
+                visitor,
+                START_EXPECTED,
+            ))
+        }
     }
-    
+
     let mut result = String::new();
     while let Some(c) = visitor.next_if(char_may_be_unquoted) {
         // escape sequences are not allowed in unquoted strings
@@ -410,10 +450,7 @@ fn parse_escape_sequence(visitor: &mut StrVisitor) -> Result<char> {
     const ESCAPABLE_CHARACTER: &'static str = "any escapable character";
     let escaped_char = visitor
         .next()
-        .ok_or_else(|| SnbtDeserialisationError::from_visitor(
-            &visitor,
-            ESCAPABLE_CHARACTER
-        ))?;
+        .ok_or_else(|| SnbtDeserialisationError::from_visitor(&visitor, ESCAPABLE_CHARACTER))?;
     // see https://minecraft.wiki/w/NBT_format#Escape_sequences
     Ok(match escaped_char {
         '\\' => '\\',
@@ -425,19 +462,21 @@ fn parse_escape_sequence(visitor: &mut StrVisitor) -> Result<char> {
         'r' => '\r',
         's' => ' ',
         't' => '\t',
-        'x' => {
-            parse_hexadecimal_as_char::<_, _, std::convert::Infallible, _>(visitor, u8::from_str_radix, 2)?
-        }
-        'u' => {
-            parse_hexadecimal_as_char::<_, _, std::convert::Infallible, _>(
-                visitor,
-                |s, r| u16::from_str_radix(s, r).map(|i| i as u32),
-                4
-            )?
-        }
-        'U' => {
-            parse_hexadecimal_as_char::<_, _, std::convert::Infallible, _>(visitor, u32::from_str_radix, 8)?
-        }
+        'x' => parse_hexadecimal_as_char::<_, _, std::convert::Infallible, _>(
+            visitor,
+            u8::from_str_radix,
+            2,
+        )?,
+        'u' => parse_hexadecimal_as_char::<_, _, std::convert::Infallible, _>(
+            visitor,
+            |s, r| u16::from_str_radix(s, r).map(|i| i as u32),
+            4,
+        )?,
+        'U' => parse_hexadecimal_as_char::<_, _, std::convert::Infallible, _>(
+            visitor,
+            u32::from_str_radix,
+            8,
+        )?,
         'N' => {
             expect_char(visitor, '{', "{")?;
             let c = parse_unicode_name(visitor)?;
@@ -447,7 +486,7 @@ fn parse_escape_sequence(visitor: &mut StrVisitor) -> Result<char> {
         _ => {
             return Err(SnbtDeserialisationError::from_visitor(
                 visitor,
-                ESCAPABLE_CHARACTER
+                ESCAPABLE_CHARACTER,
             ))
         }
     })
@@ -456,7 +495,7 @@ fn parse_escape_sequence(visitor: &mut StrVisitor) -> Result<char> {
 fn parse_hexadecimal_as_char<N: TryInto<char, Error = E2>, E2, E, M>(
     visitor: &mut StrVisitor,
     parser: M,
-    num_expected: usize
+    num_expected: usize,
 ) -> Result<char>
 where
     M: FnOnce(&str, u32) -> StdResult<N, ParseIntError>,
@@ -468,7 +507,7 @@ where
         Err(SnbtDeserialisationError::from_visitor(
             visitor,
             // TODO: This error message could use improvement
-            "C hexadecimal characters"
+            "C hexadecimal characters",
         ))
     } else {
         Ok(parser(hex, 16)
