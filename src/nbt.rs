@@ -14,7 +14,6 @@ use std::ops::Deref;
 
 pub mod compound;
 pub mod error;
-pub mod list;
 pub(crate) mod snbt;
 pub mod tag;
 pub mod utils;

@@ -1,5 +1,4 @@
 use crate::nbt::error::SnbtDeserialisationError;
-use crate::nbt::list::NbtList;
 use crate::nbt::snbt::de::utils::{
     consume_whitespace, expect_char, impl_FromStr_through_FromVisitor, read_string, FromVisitor,
     StrVisitor,
@@ -30,6 +29,10 @@ impl NbtCompound {
         Self {
             child_tags: vec![(String::new(), child.into())],
         }
+    }
+
+    pub fn is_wrapper(&self) -> bool {
+        self.child_tags.len() == 1 && self.child_tags[0].0.is_empty()
     }
 
     pub fn deserialize_content(bytes: &mut impl Buf) -> Result<NbtCompound, Error> {
@@ -123,7 +126,7 @@ impl NbtCompound {
         self.get(name).and_then(|tag| tag.extract_string())
     }
 
-    pub fn get_list(&self, name: &str) -> Option<&NbtList> {
+    pub fn get_list(&self, name: &str) -> Option<&Vec<NbtTag>> {
         self.get(name).and_then(|tag| tag.extract_list())
     }
 

@@ -1,7 +1,7 @@
 use std::str::FromStr as _;
 
 use bytes::Bytes;
-use crab_nbt::{nbt, NbtCompound, NbtList, NbtTag};
+use crab_nbt::{nbt, NbtCompound, NbtTag};
 
 macro_rules! assert_parse {
     ($input:expr, $expected:expr) => {
@@ -22,7 +22,7 @@ fn nbt_tag() {
 
 #[test]
 fn nbt_list() {
-    assert_eq!(tag_helper("[]"), NbtTag::List(NbtList::new()));
+    assert_eq!(tag_helper("[]"), NbtTag::List(Vec::new()));
     assert!("[,]".parse::<NbtTag>().is_err());
     assert_eq!(
         tag_helper("[A,B,C ,D,      E,    F    ,   G   , ]"),
@@ -35,12 +35,12 @@ fn nbt_list() {
     );
     assert_eq!(
         tag_helper("[A,[],B,{},]"),
-        NbtTag::List(NbtList::from_iter(vec![
+        NbtTag::List(vec![
             NbtTag::String("A".to_string()),
-            NbtTag::List(NbtList::new()),
+            NbtTag::List(Vec::new()),
             NbtTag::String("B".to_string()),
             NbtTag::Compound(NbtCompound::new()),
-        ]))
+        ])
     );
     assert_eq!(
         tag_helper("[\"A\", \"B\", C, \"D\", E]"),
