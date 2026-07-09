@@ -18,7 +18,7 @@ fn list_types() {
     assert_eq!(iter.next(), None);
 
     let mut serialized = NbtTag::List(homogeneous).serialize();
-    let NbtTag::List(homogeneous) = NbtTag::deserialize(&mut serialized).unwrap() else {
+    let Ok(NbtTag::List(homogeneous)) = NbtTag::deserialize(&mut serialized) else {
         panic!("homogeneous list did not survive round trip");
     };
 
@@ -47,4 +47,9 @@ fn list_types() {
         )
     );
     assert_eq!(iter.next(), None);
+
+    let mut serialized = NbtTag::List(heterogeneous).serialize();
+    let Ok(NbtTag::List(_heterogeneous)) = NbtTag::deserialize(&mut serialized) else {
+        panic!("heterogeneous list did not survive round trip");
+    };
 }
