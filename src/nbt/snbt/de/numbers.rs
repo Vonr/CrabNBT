@@ -4,10 +4,12 @@
 
 use std::{borrow::Cow, fmt::Debug, str::FromStr};
 
-use crate::nbt::{
-    error::SnbtDeserialisationError,
-    snbt::de::utils::{
-        expect_str, expect_str_ignore_case, read_slice_while_skipping, ReaderAction, StrVisitor,
+use crate::{
+    nbt::{
+        error::SnbtDeserialisationError,
+        snbt::de::utils::{
+            expect_str, expect_str_ignore_case, read_slice_while_skipping, ReaderAction, StrVisitor,
+        },
     },
     NbtTag,
 };

@@ -6,7 +6,6 @@ use crate::nbt::snbt::de::utils::{
 };
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use crab_nbt::nbt::compound::NbtCompound;
-use crab_nbt::nbt::tag::NbtTag;
 use crab_nbt::nbt::utils::*;
 use std::fmt::{self, Display, Formatter};
 use std::io::{Cursor, Write};
@@ -72,10 +71,14 @@ impl Nbt {
 
     pub fn write(&self) -> Bytes {
         let mut bytes = BytesMut::new();
-        bytes.put_u8(COMPOUND_ID);
-        bytes.put(NbtTag::String(self.name.to_string()).serialize_data());
-        bytes.put(self.root_tag.serialize_content());
+        self.write_into(&mut bytes);
         bytes.freeze()
+    }
+
+    pub fn write_into(&self, bytes: &mut BytesMut) {
+        bytes.put_u8(COMPOUND_ID);
+        serialize_str_into(&self.name, bytes);
+        self.root_tag.serialize_content_into(bytes);
     }
 
     pub fn write_to_writer<W: Write>(&self, mut writer: W) -> Result<(), Error> {
@@ -87,9 +90,13 @@ impl Nbt {
     /// Used in [Network NBT](https://wiki.vg/NBT#Network_NBT_(Java_Edition)).
     pub fn write_unnamed(&self) -> Bytes {
         let mut bytes = BytesMut::new();
-        bytes.put_u8(COMPOUND_ID);
-        bytes.put(self.root_tag.serialize_content());
+        self.write_unnamed_into(&mut bytes);
         bytes.freeze()
+    }
+
+    pub fn write_unnamed_into(&self, bytes: &mut BytesMut) {
+        bytes.put_u8(COMPOUND_ID);
+        self.root_tag.serialize_content_into(bytes);
     }
 
     pub fn write_unnamed_to_writer<W: Write>(&self, mut writer: W) -> Result<(), Error> {

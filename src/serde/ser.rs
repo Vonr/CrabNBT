@@ -1,7 +1,6 @@
 use crate::error::Error::UnsupportedType;
 use crate::error::{Error, Result};
 use crate::nbt::utils::*;
-use crate::NbtTag;
 use bytes::{BufMut, BytesMut};
 use crab_nbt::nbt::utils::END_ID;
 use serde::ser::Impossible;
@@ -32,8 +31,7 @@ impl Serializer {
         match &mut self.state {
             State::Named(name) | State::Array { name, .. } => {
                 self.output.put_u8(tag);
-                self.output
-                    .put(NbtTag::String(name.clone()).serialize_data());
+                serialize_str_into(name, &mut self.output);
             }
             State::FirstListElement { len } => {
                 self.output.put_u8(tag);
@@ -178,8 +176,7 @@ impl ser::Serializer for &mut Serializer {
             return Ok(());
         }
 
-        self.output
-            .put(NbtTag::String(v.to_string()).serialize_data());
+        serialize_str_into(v, &mut self.output);
         Ok(())
     }
 
@@ -332,13 +329,11 @@ impl ser::Serializer for &mut Serializer {
         match &mut self.state {
             State::Root(root_name) => {
                 if let Some(root_name) = root_name {
-                    self.output
-                        .put(NbtTag::String(root_name.clone()).serialize_data());
+                    serialize_str_into(root_name, &mut self.output);
                 }
             }
             State::Named(string) => {
-                self.output
-                    .put(NbtTag::String(string.clone()).serialize_data());
+                serialize_str_into(string, &mut self.output);
             }
             State::FirstListElement { len } => {
                 self.output.put_i32(*len);
